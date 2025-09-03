@@ -2,7 +2,16 @@ import { validationResult } from "express-validator";
 import { SuperAdminPlans } from "../model/SuperAdminPlan.js";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Initialize Stripe only when an API key is configured. This prevents the
+// application from crashing in environments where Stripe is not set up.
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+} else {
+    console.warn(
+        "STRIPE_SECRET_KEY is not configured. Stripe features are disabled."
+    );
+}
 
 const createPlan = async (req, res) => {
     try {
@@ -44,6 +53,12 @@ const createPlan = async (req, res) => {
 
         // Create Stripe Price if this is a paid plan
         if (price > 0) {
+            if (!stripe) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Stripe is not configured",
+                });
+            }
             try {
                 // First creating a Stripe Product
                 const stripeProduct = await stripe.products.create({
@@ -234,6 +249,12 @@ const updatePlan = async (req, res) => {
         ) {
             try {
                 if (req.body.price > 0) {
+                    if (!stripe) {
+                        return res.status(500).json({
+                            success: false,
+                            message: "Stripe is not configured",
+                        });
+                    }
                     // Create new Stripe Price (can't update existing price) !!
                     let interval = "month";
                     const billingCycle =
@@ -316,7 +337,7 @@ const deletePlan = async (req, res) => {
         }
 
         // Deactivate the Stripe Price instead of deleting (Stripe doesn't allow price deletion) !!
-        if (plan.stripePriceId) {
+        if (plan.stripePriceId && stripe) {
             try {
                 await stripe.prices.update(plan.stripePriceId, {
                     active: false,
@@ -363,7 +384,7 @@ const togglePlanStatus = async (req, res) => {
         await plan.save();
 
         // Update Stripe Price status
-        if (plan.stripePriceId) {
+        if (plan.stripePriceId && stripe) {
             try {
                 await stripe.prices.update(plan.stripePriceId, {
                     active: plan.isActive,
