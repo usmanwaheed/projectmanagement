@@ -5,10 +5,22 @@ import { SuperAdminPlans } from "../model/SuperAdminPlan.js";
 import { NotificationService } from "../../utils/notificationService.js";
 import { ROLES } from "../../config/roles.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Initialize Stripe only when an API key is provided to avoid startup
+// failures in environments without Stripe configuration.
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+} else {
+    console.warn(
+        "STRIPE_SECRET_KEY is not configured. Stripe features are disabled."
+    );
+}
 
 // Helper function to create Stripe products and prices for plans
 const createStripeProductAndPrice = async (plan) => {
+    if (!stripe) {
+        throw new Error("Stripe is not configured");
+    }
     try {
         // Create product in Stripe
         const product = await stripe.products.create({
@@ -51,6 +63,12 @@ const createStripeProductAndPrice = async (plan) => {
 };
 
 const createSubscription = async (req, res) => {
+    if (!stripe) {
+        return res.status(500).json({
+            success: false,
+            message: "Stripe is not configured",
+        });
+    }
     try {
         const { planId, paymentMethodId, customerDetails, agreementAccepted } =
             req.body;
