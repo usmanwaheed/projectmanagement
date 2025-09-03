@@ -49,6 +49,7 @@ import userSubTask from "./routes/userSubTask.js";
 import videosPdfSubTask from "./routes/videos&PdfSubTask.js";
 import screenRecordingRoutes from "./routes/screenRecordingRoutes.js";
 import notificationRoute from "./routes/notificationRoute.js";
+import chatRoute from "./routes/chatRoute.js";
 
 import PlanRoute from "./adminPanel/routes/planRoute.js";
 import SuperAdminAuth from "./adminPanel/routes/superAdminAuth.js";
@@ -63,6 +64,7 @@ app.use("/user", userSubTask);
 app.use("/user", videosPdfSubTask);
 app.use("/company", screenRecordingRoutes);
 app.use("/notifications", notificationRoute);
+app.use("/chat", chatRoute);
 
 app.use("/admin", SuperAdminAuth);
 app.use("/superadmin/plans", PlanRoute);
