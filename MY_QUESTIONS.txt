@@ -1,0 +1,26 @@
+safeSide
+rolling back to the successfull check
+(branch reverted back)
+
+
+THIS IS THE DATA EXAMPLE WHICH I CAN USE WITHOUT SETTING UP THE AUTHPROVIDER AND USE THE ISER DETAILS IN ANY PAGE.
+// In Profile.js or another component
+
+import { useQuery } from 'react-query';
+
+const Profile = () => {
+  const { data: user, isLoading, error } = useQuery(["user"]);
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error loading user data</p>;
+
+  return (
+    <div>
+      <h1>Welcome, {user?.name}</h1>
+      <p>Email: {user?.email}</p>
+      {/* Display other user information */}
+    </div>
+  );
+};
+
+export default Profile;
