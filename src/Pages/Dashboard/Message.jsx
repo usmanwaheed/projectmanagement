@@ -1,111 +1,163 @@
-import { Container, Typography, Box, Stack, TableBody, TableRow, TableCell, TableHead, Table, TableContainer, Grid, Dialog } from "@mui/material";
-import style from "./DashboardScss/project.module.scss"
+import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
+import { axiosInstance } from "../../api/axiosInstance";
 import { useAuth } from "../../context/AuthProvider";
-import Image2 from "../../assets/demoImage/2.jpg"
-import Image3 from "../../assets/demoImage/3.jpg"
-import Image4 from "../../assets/demoImage/4.jpg"
-import { useState } from "react";
-
 
 const Message = () => {
+    const { user } = useAuth();
+    const [socket, setSocket] = useState(null);
+    const [rooms, setRooms] = useState([]);
+    const [currentRoom, setCurrentRoom] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [text, setText] = useState("");
+    const [image, setImage] = useState(null);
+    const [newRoom, setNewRoom] = useState("");
+    const [memberIds, setMemberIds] = useState("");
+    const [onlineUsers, setOnlineUsers] = useState([]);
 
-    const { theme, mode } = useAuth();
-    const tableGap = mode === 'light' ? style.tableBodyLight : style.tableBodyDark;
-    const tableClassText = mode === 'light' ? 'lightTableText' : 'darkTableText';
+    // Setup socket
+    useEffect(() => {
+        const s = io("http://localhost:6007");
+        setSocket(s);
+        if (user?._id) {
+            s.emit("register", user._id);
+        }
+        s.on("onlineUsers", setOnlineUsers);
+        s.on("newMessage", (msg) => {
+            setMessages((prev) => [...prev, msg]);
+        });
+        return () => {
+            s.disconnect();
+        };
+    }, [user]);
 
-    const [open, setOpen] = useState(false);
-    const [selectedImage, setSelectedImage] = useState(null);
+    // Load rooms
+    useEffect(() => {
+        if (user?._id) {
+            axiosInstance.get("/chat/rooms").then((res) => {
+                setRooms(res.data.data || []);
+            });
+        }
+    }, [user]);
 
-    const handleOpen = (imageSrc) => {
-        setSelectedImage(imageSrc);
-        setOpen(true);
+    const createRoom = async () => {
+        const members = memberIds
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean);
+        try {
+            const res = await axiosInstance.post("/chat/rooms", {
+                name: newRoom,
+                members,
+            });
+            setRooms((prev) => [...prev, res.data.data]);
+            setNewRoom("");
+            setMemberIds("");
+        } catch (e) {
+            console.error(e);
+        }
     };
 
-    const handleClose = () => {
-        setOpen(false);
-        setSelectedImage(null);
+    const joinRoom = async (room) => {
+        setCurrentRoom(room);
+        setMessages([]);
+        socket && socket.emit("joinRoom", room._id);
+        const res = await axiosInstance.get(`/chat/rooms/${room._id}/messages`);
+        setMessages(res.data.data || []);
+    };
+
+    const handleFile = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setImage(reader.result);
+        reader.readAsDataURL(file);
+    };
+
+    const sendMessage = async () => {
+        if (!currentRoom) return;
+        let type = "text";
+        let content = text;
+        if (image) {
+            type = "image";
+            content = image;
+        } else if (/https?:\/\//.test(text)) {
+            type = "link";
+        }
+        await axiosInstance.post(`/chat/rooms/${currentRoom._id}/messages`, {
+            content,
+            type,
+        });
+        setText("");
+        setImage(null);
+    };
+
+    const isOnline = (id) => {
+        const userId = typeof id === "object" ? id._id : id;
+        return onlineUsers.includes(userId);
     };
 
     return (
-        <Container sx={{ mt: 4, mb: 4 }}>
-            <Stack variant="div" gap={8} my={4}>
-                <Box>
-                    <Typography variant="h6" mb={1} className={tableClassText}>
-                        Task Name: (Person Name)
-                    </Typography>
-                    <Typography variant="body1" className={`${style.galleryDate} ${tableClassText}`}>
-                        12-January-2020
-                    </Typography>
-
-                    <Grid container spacing={3} ml="1px">
-                        <Stack className={`${style.boxDropDown}`} sx={{ alignItems: 'center' }}>
-
-                            <Grid item className={style.gridBox}>
-                                {[Image2, Image3, Image4, Image2, Image3, Image4, Image2, Image3, Image4,].map((image, index) => (
-                                    <img
-                                        key={index}
-                                        src={image}
-                                        alt="Snap Shots"
-                                        width="200"
-                                        className={style.snapShotImg}
-                                        onClick={() => handleOpen(image)}
-                                    />
-                                ))}
-                            </Grid>
-
-                        </Stack>
-
-                    </Grid>
-                    <Typography variant="p" mb={3} className={style.noTaskAssignText}>
-                        No Current Snap-Shots
-                    </Typography>
-                    <Dialog open={open} onClose={handleClose} maxWidth="lg">
-                        {selectedImage && (
-                            <img src={selectedImage} alt="Enlarged View" style={{ width: "100%", height: "auto" }} />
-                        )}
-                    </Dialog>
-                </Box>
-
-
-                <TableContainer>
-                    <Typography variant="h6" mb={1} className={tableClassText}>
-                        Employee&apos;s Time-Track
-                    </Typography>
-                    <Table
-                        sx={{
-                            backgroundColor: theme.palette.background.paper,
-                            color: theme.palette.text.primary,
-                            overflow: 'visible',
-                            borderRadius: '0.6rem'
-                        }}>
-
-                        <TableHead>
-                            <TableRow className={style.tableRowHead}>
-                                <TableCell className={tableClassText}>Employee</TableCell>
-                                <TableCell align="center" className={tableClassText}>TimeIn</TableCell>
-                                <TableCell align="center" className={tableClassText}>TimeOut</TableCell>
-                                <TableCell align="center" className={tableClassText}>Tracked Time</TableCell>
-                                <TableCell align="center" className={tableClassText}>Date</TableCell>
-                                <TableCell align="center" className={tableClassText}>Weekly Time</TableCell>
-                                <TableCell align="center" className={tableClassText}>Monthly Time</TableCell>
-                            </TableRow>
-                        </TableHead>
-
-                        <TableBody className={tableGap}>
-                            <TableRow className={style.tableRowBody}>
-                                <TableCell component="th" scope="row">1</TableCell>
-                                <TableCell align="center">21:04</TableCell>
-                                <TableCell align="center">3</TableCell>
-                                <TableCell align="center">4</TableCell>
-                                <TableCell align="center">5</TableCell>
-                                <TableCell align="center">6</TableCell>
-                                <TableCell align="center">$7</TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Stack>
-        </Container>
+        <div style={{ display: "flex", gap: "1rem", padding: "1rem" }}>
+            <div style={{ width: "200px" }}>
+                <h3>Rooms</h3>
+                <ul>
+                    {rooms.map((r) => (
+                        <li
+                            key={r._id}
+                            onClick={() => joinRoom(r)}
+                            style={{ cursor: "pointer", fontWeight: currentRoom?._id === r._id ? "bold" : "normal" }}
+                        >
+                            {r.name}
+                        </li>
+                    ))}
+                </ul>
+                <input
+                    placeholder="Room name"
+                    value={newRoom}
+                    onChange={(e) => setNewRoom(e.target.value)}
+                />
+                <input
+                    placeholder="Member IDs, comma separated"
+                    value={memberIds}
+                    onChange={(e) => setMemberIds(e.target.value)}
+                />
+                <button onClick={createRoom}>Create</button>
+            </div>
+            {currentRoom && (
+                <div style={{ flex: 1 }}>
+                    <h3>{currentRoom.name}</h3>
+                    <div style={{ height: "300px", overflowY: "auto", border: "1px solid #ccc" }}>
+                        <ul>
+                            {messages.map((m, i) => (
+                                <li key={i}>
+                                    <span
+                                        style={{ color: isOnline(m.sender) ? "green" : "gray", marginRight: "4px" }}
+                                    >
+                                        ●
+                                    </span>
+                                    <strong style={{ marginRight: "4px" }}>
+                                        {typeof m.sender === "object" ? m.sender.name : ""}
+                                    </strong>
+                                    {m.type === "image" ? (
+                                        <img src={m.content} alt="" width={100} />
+                                    ) : (
+                                        <span>{m.content}</span>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    <input
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Type a message"
+                    />
+                    <input type="file" onChange={handleFile} />
+                    <button onClick={sendMessage}>Send</button>
+                </div>
+            )}
+        </div>
     );
 };
 
